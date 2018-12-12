@@ -4,12 +4,14 @@ This is a basic script to backup a Red Hat Satellite Server to a directory. It s
 
 The script is intended to be used where full backups are taken weekly and incremental backups are taken daily.
 
-This has been tested on Red Hat Satellite Server 6.2 and 6.3
+Satellite 6.4 deprecated satellite-backup and katello-backup 
+This modified script has been tested on Red Hat Satellite Server 6.4
+
 
 ## Requirements
   - Packages gzip and mail installed
   - Server is configured to send mail
-  - Satellite installed and configured with katello-backup (6.2) or satellite-backup (6.3) available
+  - Satellite installed and configured with katello-backup (6.2), satellite-backup (6.3), foreman-maintain (6.4) available
   - Backup Retention understood and plugged into the script's variables
   - Email address to send backup reports to plugged into the script's variables
 

@@ -14,13 +14,24 @@
 # Dependencies:
 #       Red Hat Satellite 6.2 - katello-backup must be available.
 #	Red Hat Satellite 6.3 - satellite-backup must be available
-#	Packages mail, gzip must be installed and the server must be able to send mail.
+#	Red Hat Satellite 6.4 - foreman-maintain must be available
+#	Packages mutt, gzip must be installed and the server must be able to send mail.
 #
 # Disclaimer:
 #	This script is NOT SUPPORTED by Red Hat Global Support Service.
 #
 # Modification History:
 #  v1.0 - 15/03/2018 - Initial Version - Talor Holloway (Red Hat Consulting)
+#  v1.1 - 30/08/2018 - peterceeau
+#	Use mutt for mail, find it easier to work with
+#  v1.2 - 12/12/2018 - peterceeau
+# 	Satellite 6.4 deprecated both katello-backup and satellite-backup in favour
+#	of foreman-maintain backup.
+#	Add case statement for 6.4 BACKUP_UTILITY. Change order of command line
+#	options, original command failed with "ERROR: too many arguments"
+# 	New foreman-maintain command has a spinning progress counter which is
+#	filling the logfile with lines and lines of output, add grep log before
+#	attaching to email.
 #
 # Called by:
 #  root crontab
@@ -39,6 +50,7 @@ SCRIPTNAME=${0##*/}
 MSGS=true
 ERRS=true
 RV=0
+MAIL=/usr/bin/mutt   # Added to enable simpler mail configuration
 
 #####################################################################################
 ###################  Functions
@@ -89,7 +101,8 @@ generate_lock()
                 if ps -fp $Pid  > /dev/null 2>&1
                 then
                         MSG="$SCRIPTNAME [ Pid: $Pid ] already running on ${SID} please investigate"
-                        cat $LOG | mail -s "$MSG" $ALERTS
+                        #cat $LOG | mail -s "$MSG" $ALERTS
+			cat $LOG | ${MAIL} -s "$MSG" $ALERT
                         exit
                 else
                         rm -rf $LOCKFILE
@@ -114,10 +127,12 @@ atexit()
         if [ $RV -gt 0 ]
         then
                 MSG="An error occurred whilst performing a ${TYPE} Satellite Backup on $(hostname -s)"
-                cat $LOG | mail -s "$MSG" $ALERTS
+                #cat $LOG | mail -s "$MSG" $ALERTS
+		grep -v ^^M $LOG | ${MAIL} -s "$MSG" $ALERTS
         else
                 MSG="An ${TYPE} Satellite backup on $(hostname -s) completed successfully"
-                cat $LOG |mail -s "$MSG" $REPORTS
+                #cat $LOG |mail -s "$MSG" $REPORTS
+		grep -v ^^M $LOG | ${MAIL} -s "$MSG" $ALERTS
         fi
 
         # Make sure the lock file is removed
@@ -149,6 +164,9 @@ run_satver_validation()
 	        6.3)
 			BACKUP_UTILITY=satellite-backup
 	        ;;
+		6.4)
+                        BACKUP_UTILITY="foreman-maintain backup offline"
+                ;;
 	        *)
 	                usage "ERROR Unknown Satellite Version"
 			RV=50
@@ -221,7 +239,9 @@ run_full()
         echo "$TYPE backup of Satellite started at $(date)"
         echo "================================================================"
 
-	$BACKUP_UTILITY ${BACKUP_DIRECTORY}/full --assumeyes ${SKIP_OPTIONS}
+	#$BACKUP_UTILITY ${BACKUP_DIRECTORY}/full --assumeyes ${SKIP_OPTIONS}
+	#peterceeau: order is important for new satellite 6.4 backup command
+	$BACKUP_UTILITY --assumeyes ${BACKUP_DIRECTORY}/full
         rv=$?
         if [ $rv -eq 0 ]
         then
@@ -247,7 +267,10 @@ run_incremental()
 	if [ $(find ${BACKUP_DIRECTORY}/full |egrep -c 'katello-backup|satellite-backup') -gt 0 ]
 	then
                 LASTFULL=$(find ${BACKUP_DIRECTORY}/full -type d |sort -rn |head -1)
-                $BACKUP_UTILITY ${BACKUP_DIRECTORY}/incr --incremental ${LASTFULL} --assumeyes ${SKIP_OPTIONS}
+                #$BACKUP_UTILITY ${BACKUP_DIRECTORY}/incr --incremental ${LASTFULL} --assumeyes ${SKIP_OPTIONS}
+		#peterceeau: order is important for new satellite 6.4 backup command
+                $BACKUP_UTILITY --incremental ${LASTFULL} --assumeyes ${BACKUP_DIRECTORY}/incr
+
 	        rv=$?
  		if [ $rv -eq 0 ]
 	 	then
